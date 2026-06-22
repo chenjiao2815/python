@@ -1,105 +1,405 @@
-import os
-import torch
-import numpy as np
-from PIL import Image
-import torchvision.transforms as transforms
-from model import get_model
-from config import *
-import matplotlib.pyplot as plt
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>道路提取系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-def load_image(image_path):
-    """加载并预处理图像"""
-    # 读取图像
-    image = Image.open(image_path).convert('RGB')
-    
-    # 保存原始图像尺寸
-    original_size = image.size
-    
-    # 定义预处理转换
-    transform = transforms.Compose([
-        transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=MEAN, std=STD)
-    ])
-    
-    # 应用预处理
-    image_tensor = transform(image)
-    return image_tensor.unsqueeze(0), original_size  # 添加batch维度
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
 
-def predict(model, image_tensor, device):
-    """使用模型进行预测"""
-    model.eval()
-    with torch.no_grad():
-        image_tensor = image_tensor.to(device)
-        output = model(image_tensor)
-        # 应用sigmoid激活函数
-        output = torch.sigmoid(output)
-    return output
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
 
-def postprocess(output, original_size, threshold=0.5):
-    """后处理预测结果"""
-    # 将输出转换为numpy数组
-    pred_mask = output.squeeze().cpu().numpy()
-    
-    # 应用阈值
-    pred_mask = (pred_mask > threshold).astype(np.uint8)
-    
-    # 调整回原始图像大小
-    pred_mask = Image.fromarray(pred_mask)
-    pred_mask = pred_mask.resize(original_size, Image.NEAREST)
-    
-    return np.array(pred_mask)
+        h1 {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
 
-def visualize_results(image_path, pred_mask, save_path=None):
-    """可视化原始图像和预测结果"""
-    # 读取原始图像
-    original_image = np.array(Image.open(image_path))
-    
-    # 创建图像显示
-    plt.figure(figsize=(12, 6))
-    
-    # 显示原始图像
-    plt.subplot(1, 2, 1)
-    plt.imshow(original_image)
-    plt.title('原始图像')
-    plt.axis('off')
-    
-    # 显示预测掩码
-    plt.subplot(1, 2, 2)
-    plt.imshow(pred_mask, cmap='gray')
-    plt.title('预测的道路掩码')
-    plt.axis('off')
-    
-    # 保存或显示结果
-    if save_path:
-        plt.savefig(save_path)
-        plt.close()
-    else:
-        plt.show()
+        .upload-section {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
 
-def main():
-    # 设置设备
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    
-    # 加载模型
-    model = get_model()
-    model.load_state_dict(torch.load(os.path.join(SAVE_DIR, 'best_model.pth')))
-    model = model.to(device)
-    
-    # 设置输入图像路径
-    image_path = '23128915_15.jpg'  # 替换为实际的测试图像路径
-    
-    # 加载和预处理图像
-    image_tensor, original_size = load_image(image_path)
-    
-    # 进行预测
-    output = predict(model, image_tensor, device)
-    
-    # 后处理预测结果
-    pred_mask = postprocess(output, original_size)
-    
-    # 可视化结果
-    visualize_results(image_path, pred_mask, save_path='prediction_result.png')
+        .upload-area {
+            border: 3px dashed #ddd;
+            border-radius: 15px;
+            padding: 60px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
 
-if __name__ == '__main__':
-    main()
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .upload-area.dragover {
+            border-color: #667eea;
+            background: #eef1ff;
+        }
+
+        .upload-area i {
+            font-size: 4rem;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        .upload-area p {
+            color: #666;
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+        }
+
+        .upload-area small {
+            color: #999;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 30px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            margin-top: 20px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .result-section {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            display: none;
+        }
+
+        .result-section.active {
+            display: block;
+        }
+
+        .result-title {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+        }
+
+        .image-box {
+            text-align: center;
+        }
+
+        .image-box img {
+            max-width: 100%;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .image-box p {
+            margin-top: 10px;
+            color: #666;
+            font-weight: 500;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading p {
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        .history-section {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            margin-top: 30px;
+        }
+
+        .history-title {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+
+        .history-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .history-item {
+            position: relative;
+            border-radius: 10px;
+            overflow: hidden;
+            cursor: pointer;
+            aspect-ratio: 1;
+        }
+
+        .history-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .history-item .timestamp {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 5px 10px;
+            font-size: 0.8rem;
+            text-align: center;
+        }
+
+        .no-history {
+            text-align: center;
+            color: #999;
+            padding: 40px;
+        }
+
+        .error-message {
+            background: #ffebee;
+            border-left: 5px solid #f44336;
+            padding: 15px;
+            margin-top: 20px;
+            color: #c62828;
+            border-radius: 5px;
+            display: none;
+        }
+
+        .error-message.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛣️ 道路提取系统</h1>
+
+        <div class="upload-section">
+            <div class="upload-area" id="uploadArea">
+                <i>📷</i>
+                <p>点击或拖拽图片到此处上传</p>
+                <small>支持 JPG、PNG 格式，建议使用卫星影像</small>
+            </div>
+            <input type="file" id="fileInput" accept="image/jpeg,image/png">
+            <button class="btn" id="uploadBtn" disabled>开始提取道路</button>
+            <div class="error-message" id="errorMessage"></div>
+        </div>
+
+        <div class="result-section" id="resultSection">
+            <h2 class="result-title">提取结果</h2>
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>正在分析图像...</p>
+            </div>
+            <div class="image-grid" id="resultGrid" style="display: none;">
+                <div class="image-box">
+                    <img id="originalImage" alt="原始图像">
+                    <p>原始图像</p>
+                </div>
+                <div class="image-box">
+                    <img id="resultImage" alt="道路提取结果">
+                    <p>道路提取结果</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="history-section">
+            <h2 class="history-title">历史记录</h2>
+            <div class="history-grid" id="historyGrid">
+                <div class="no-history">暂无历史记录</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const resultSection = document.getElementById('resultSection');
+        const loading = document.getElementById('loading');
+        const resultGrid = document.getElementById('resultGrid');
+        const originalImage = document.getElementById('originalImage');
+        const resultImage = document.getElementById('resultImage');
+        const errorMessage = document.getElementById('errorMessage');
+        const historyGrid = document.getElementById('historyGrid');
+
+        let selectedFile = null;
+
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        function handleFile(file) {
+            const validTypes = ['image/jpeg', 'image/png'];
+            if (!validTypes.includes(file.type)) {
+                showError('请上传 JPG 或 PNG 格式的图片');
+                return;
+            }
+
+            selectedFile = file;
+            uploadBtn.disabled = false;
+            errorMessage.classList.remove('active');
+        }
+
+        uploadBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            uploadBtn.disabled = true;
+            resultSection.classList.add('active');
+            loading.style.display = 'block';
+            resultGrid.style.display = 'none';
+            errorMessage.classList.remove('active');
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error('服务器错误');
+                }
+
+                const data = await response.json();
+                const reader = new FileReader();
+                
+                reader.onload = (e) => {
+                    originalImage.src = e.target.result;
+                };
+                reader.readAsDataURL(selectedFile);
+
+                resultImage.src = `data:image/png;base64,${data.result}`;
+
+                loading.style.display = 'none';
+                resultGrid.style.display = 'grid';
+                loadHistory();
+            } catch (error) {
+                console.error('Error:', error);
+                showError('处理失败，请稍后重试');
+                loading.style.display = 'none';
+            }
+
+            uploadBtn.disabled = false;
+        });
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.add('active');
+        }
+
+        async function loadHistory() {
+            try {
+                const response = await fetch('/history');
+                const history = await response.json();
+
+                if (history.length === 0) {
+                    historyGrid.innerHTML = '<div class="no-history">暂无历史记录</div>';
+                    return;
+                }
+
+                historyGrid.innerHTML = history.map(item => `
+                    <div class="history-item">
+                        <img src="data:image/png;base64,${item.result}" alt="历史结果">
+                        <div class="timestamp">${item.timestamp}</div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('加载历史记录失败:', error);
+            }
+        }
+
+        // 页面加载时获取历史记录
+        loadHistory();
+    </script>
+</body>
+</html>
