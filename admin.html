@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理员面板</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand">系统管理后台</a>
+            <button class="btn btn-outline-light" onclick="logout()">退出登录</button>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header bg-primary text-white"><h5 class="mb-0">模型管理</h5></div>
+                    <div class="card-body">
+                        <p class="text-muted">上传新的 .pth 模型，自动替换当前运行模型</p>
+                        <input type="file" id="modelFile" class="form-control mb-3" accept=".pth">
+                        <button class="btn btn-primary" id="modelBtn" onclick="uploadModel()">上传并更新模型</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header bg-success text-white"><h5 class="mb-0">训练数据集管理</h5></div>
+                    <div class="card-body">
+                        <p class="text-muted">批量上传训练图片至训练集目录</p>
+                        <input type="file" id="dataFile" class="form-control mb-3" multiple accept=".jpg,.png,.jpeg">
+                        <button class="btn btn-success" id="dataBtn" onclick="uploadDataset()">上传数据集</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header bg-secondary text-white"><h5 class="mb-0">全量用户使用记录</h5></div>
+            <div class="card-body">
+                <table class="table table-bordered table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>序号</th>
+                            <th>操作用户</th>
+                            <th>文件名</th>
+                            <th>操作时间</th>
+                            <th>结果预览</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logTable">
+                        <tr><td colspan="5" class="text-center">加载中...</td></tr>
+                    </tbody>
+                </table>
+                <div class="d-flex justify-content-between align-items-center">
+                    <span id="logPageInfo"></span>
+                    <div>
+                        <button class="btn btn-sm btn-outline-secondary" id="logPrev" onclick="logPage(-1)">上一页</button>
+                        <button class="btn btn-sm btn-outline-secondary" id="logNext" onclick="logPage(1)">下一页</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="position-fixed top-3 end-3" id="toast"></div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const token = localStorage.getItem('token');
+        if(!token || localStorage.getItem('isAdmin')!=='true') window.location.href='/login';
+
+        let logPage = 1, logSize = 10, logTotalPage = 1;
+
+        function showToast(msg, ok=true){
+            const t = document.getElementById('toast');
+            t.innerHTML = `<div class="toast show text-white ${ok?'bg-success':'bg-danger'} p-2">${msg}</div>`;
+            setTimeout(()=>t.innerHTML='',2500);
+        }
+
+        function logout(){
+            localStorage.clear();
+            window.location.href='/login';
+        }
+
+        async function uploadModel(){
+            const file = document.getElementById('modelFile').files[0];
+            const btn = document.getElementById('modelBtn');
+            if(!file) return showToast('请选择 .pth 模型文件', false);
+            btn.disabled = true; btn.innerText = '上传中...';
+            const form = new FormData(); form.append('file', file);
+            try{
+                const res = await fetch('/api/admin/upload-model',{
+                    method:'POST', headers:{Authorization:`Bearer ${token}`}, body:form
+                });
+                const data = await res.json();
+                showToast(data.msg);
+            }catch(e){
+                showToast('上传失败：'+e.message, false);
+            }finally{
+                btn.disabled = false; btn.innerText = '上传并更新模型';
+            }
+        }
+
+        async function uploadDataset(){
+            const files = document.getElementById('dataFile').files;
+            const btn = document.getElementById('dataBtn');
+            if(files.length === 0) return showToast('请选择图片文件', false);
+            btn.disabled = true; btn.innerText = '上传中...';
+            const form = new FormData();
+            for(let f of files) form.append('files', f);
+            try{
+                const res = await fetch('/api/admin/upload-dataset',{
+                    method:'POST', headers:{Authorization:`Bearer ${token}`}, body:form
+                });
+                const data = await res.json();
+                showToast(data.msg);
+            }catch(e){
+                showToast('上传失败：'+e.message, false);
+            }finally{
+                btn.disabled = false; btn.innerText = '上传数据集';
+            }
+        }
+
+        async function loadLogs(){
+            const res = await fetch(`/api/admin/logs?page=${logPage}&page_size=${logSize}`,{
+                headers:{Authorization:`Bearer ${token}`}
+            });
+            const data = await res.json();
+            const total = data.total;
+            logTotalPage = Math.ceil(total / logSize);
+            const tbody = document.getElementById('logTable');
+            const pageInfo = document.getElementById('logPageInfo');
+            if(data.data.length === 0){
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center">暂无记录</td></tr>';
+                pageInfo.innerText = '共 0 条记录';
+                return;
+            }
+            tbody.innerHTML = data.data.map((item, i) => `
+                <tr>
+                    <td>${(logPage-1)*logSize + i + 1}</td>
+                    <td>${item.username}</td>
+                    <td>${item.filename}</td>
+                    <td>${new Date(item.time).toLocaleString('zh-CN')}</td>
+                    <td><img src="${item.result_path}" width="60" class="rounded"></td>
+                </tr>
+            `).join('');
+            pageInfo.innerText = `第 ${logPage} / ${logTotalPage} 页，共 ${total} 条记录`;
+        }
+
+        function logPage(delta){
+            const newPage = logPage + delta;
+            if(newPage >= 1 && newPage <= logTotalPage){
+                logPage = newPage;
+                loadLogs();
+            }
+        }
+
+        loadLogs();
+    </script>
+</body>
+</html>

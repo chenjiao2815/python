@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统登录 - 遥感道路提取系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {background-color: #f8f9fa;}
+        .login-card {max-width: 420px; margin: 80px auto; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);}
+    </style>
+</head>
+<body>
+    <div class="login-card card">
+        <h3 class="text-center mb-4 text-primary">遥感道路提取系统</h3>
+        <ul class="nav nav-tabs mb-3" id="tab">
+            <li class="nav-item w-50"><button class="nav-link active w-100" onclick="switchTab('login')">登录</button></li>
+            <li class="nav-item w-50"><button class="nav-link w-100" onclick="switchTab('reg')">注册</button></li>
+        </ul>
+
+        <div id="loginForm">
+            <div class="mb-3">
+                <label class="form-label">用户名</label>
+                <input type="text" id="username" class="form-control" placeholder="请输入用户名">
+            </div>
+            <div class="mb-4">
+                <label class="form-label">密码</label>
+                <input type="password" id="password" class="form-control" placeholder="请输入密码">
+            </div>
+            <button class="btn btn-primary w-100" onclick="login()">立即登录</button>
+        </div>
+
+        <div id="regForm" style="display: none;">
+            <div class="mb-3">
+                <label class="form-label">设置用户名</label>
+                <input type="text" id="regUser" class="form-control" placeholder="用户名">
+            </div>
+            <div class="mb-4">
+                <label class="form-label">设置密码</label>
+                <input type="password" id="regPwd" class="form-control" placeholder="密码">
+            </div>
+            <button class="btn btn-success w-100" onclick="register()">完成注册</button>
+        </div>
+    </div>
+
+    <div class="position-fixed top-3 end-3" id="toast"></div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function switchTab(type) {
+            document.getElementById('loginForm').style.display = type === 'login' ? 'block' : 'none';
+            document.getElementById('regForm').style.display = type === 'reg' ? 'block' : 'none';
+            const tabs = document.querySelectorAll('.nav-link');
+            tabs[0].classList.toggle('active', type==='login');
+            tabs[1].classList.toggle('active', type==='reg');
+        }
+
+        function showToast(msg, isSuccess=true) {
+            const toast = document.getElementById('toast');
+            const color = isSuccess ? 'bg-success' : 'bg-danger';
+            toast.innerHTML = `<div class="toast align-items-center text-white ${color} show" role="alert"><div class="d-flex"><div class="toast-body">${msg}</div></div></div>`;
+            setTimeout(()=>toast.innerHTML='',2500);
+        }
+
+        async function login() {
+            const u = document.getElementById('username').value.trim();
+            const p = document.getElementById('password').value.trim();
+            if(!u || !p) return showToast('请输入用户名和密码', false);
+            try {
+                const res = await fetch(`/login?username=${u}&password=${p}`, {method:'POST'});
+                const data = await res.json();
+                if(!res.ok) throw new Error(data.detail || '登录失败');
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('isAdmin', data.is_admin);
+                localStorage.setItem('username', data.username);
+                showToast('登录成功，正在跳转...');
+                setTimeout(()=> window.location.href = data.is_admin ? '/admin' : '/', 1000);
+            } catch (e) {
+                showToast(e.message, false);
+            }
+        }
+
+        async function register() {
+            const u = document.getElementById('regUser').value.trim();
+            const p = document.getElementById('regPwd').value.trim();
+            if(!u || !p) return showToast('用户名和密码不能为空', false);
+            try {
+                const res = await fetch(`/register?username=${u}&password=${p}`, {method:'POST'});
+                const data = await res.json();
+                if(!res.ok) throw new Error(data.detail || '注册失败');
+                showToast('注册成功，请切换到登录页登录');
+                switchTab('login');
+            } catch (e) {
+                showToast(e.message, false);
+            }
+        }
+
+        window.onload = function(){
+            if(localStorage.getItem('token')){
+                if(localStorage.getItem('isAdmin')==='true') window.location.href='/admin';
+                else window.location.href='/';
+            }
+        }
+    </script>
+</body>
+</html>
